@@ -6,9 +6,9 @@ public class Prescription {
 	private String rxid;  // primary key
 	private String drugName;
 	private int quantity;
-	private String patient_ssn;
+	private int patient_ssn;
 	private String patientName;
-	private String doctor_ssn;
+	private int doctor_ssn;
 	private String doctorName;
 	private String pharmacyID;   // pharmacy fields will be null or blank if no pharmacy has been chosen
 	private String pharmacyAddress;
@@ -36,10 +36,10 @@ public class Prescription {
 	public void setQuantity(int quantity) {
 		this.quantity = quantity;
 	}
-	public String getPatient_ssn() {
+	public int getPatient_ssn() {
 		return patient_ssn;
 	}
-	public void setPatient_ssn(String patient_ssn) {
+	public void setPatient_ssn(int patient_ssn) {
 		this.patient_ssn = patient_ssn;
 	}
 	public String getPatientName() {
@@ -48,10 +48,10 @@ public class Prescription {
 	public void setPatientName(String patientName) {
 		this.patientName = patientName;
 	}
-	public String getDoctor_ssn() {
+	public int getDoctor_ssn() {
 		return doctor_ssn;
 	}
-	public void setDoctor_ssn(String doctor_ssn) {
+	public void setDoctor_ssn(int doctor_ssn) {
 		this.doctor_ssn = doctor_ssn;
 	}
 	public String getDoctorName() {

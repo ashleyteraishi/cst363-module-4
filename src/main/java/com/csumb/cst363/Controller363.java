@@ -1,7 +1,11 @@
 package com.csumb.cst363;
 
 import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 
 import javax.validation.Valid;
@@ -13,6 +17,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+
 
 @Controller    
 public class Controller363 {
@@ -45,15 +50,35 @@ public class Controller363 {
 		}
 		System.out.println(p.toString());  // debug -- print form data to console
 		
-		/*
-		 * replace following with code to validate the prescription 
-		 * and insert a new prescription
-		 */
-		p.setRxid("RX1980031234");
+		try {
+			Connection conn = getConnection();
+			System.out.println("get connection");
+			String query = "INSERT INTO prescription "
+					+ "(quantity, dr_ssn, patient_ssn, trade_name) "
+					+ "VALUES (?, ?, ?, ?) ";
+			PreparedStatement ps = conn.prepareStatement(query);
+			System.out.println("prepared statement");
+			ps.setInt(1, p.getQuantity());
+			System.out.println("set int");
+			ps.setInt(2, p.getDoctor_ssn());
+			System.out.println("set int");
+			ps.setInt(3, p.getPatient_ssn());
+			System.out.println("set int");
+			ps.setString(4, p.getDrugName());
+			System.out.println("set string");
+			
+			ps.executeUpdate();
+			System.out.println("execute update");
+			conn.close();
+			model.addAttribute("prescription", p);
+			return "prescription_show";
+		}
 		
-		
-		model.addAttribute("prescription", p);
-		return "prescription_show";
+		catch (SQLException se) {
+			System.out.println("catch sqlexception");
+			return "error";
+		}
+
 	}
 	
 	/* 
@@ -103,24 +128,57 @@ public class Controller363 {
 	@GetMapping("/pharmacy")
 	public String pharmacyReport(
 			@RequestParam("pharmacyID") String pharmacyID,
+			@RequestParam("drug") String drug, 
 			@RequestParam("startDate") String startDate,
 			@RequestParam("endDate") String endDate,
 			Model model) {
 		System.out.println("pharamcy report. ID="+pharmacyID+", start="+startDate+", end="+endDate);  // for debug 
 		
-		// replace the following code with code to perform database search 
-		// returning drugname and quantity used
 		ArrayList<ReportElement1> drugs = new ArrayList<>();
-		drugs.add(new ReportElement1("Drug1", 5000));
-		drugs.add(new ReportElement1("Drug2", 15000));
-		drugs.add(new ReportElement1("Drug3", 7500));
+	
+		try {
+			Connection conn = getConnection();
+			String query = "SELECT trade_name, SUM(quantity) "
+					+ "FROM prescription "
+					+ "WHERE pharma_id = ? "
+					+ "AND fill_date BETWEEN ? AND ? "
+					+ "GROUP BY trade_name "
+					+ "HAVING trade_name LIKE ? ";
+			System.out.println("set connection");
+			PreparedStatement ps = conn.prepareStatement(query);
+			System.out.println("prepared statement");
+			ps.setInt(1, Integer.parseInt(pharmacyID));
+			System.out.println("set int");
+			ps.setDate(2, Date.valueOf(startDate));
+			ps.setDate(3, Date.valueOf(endDate));
+			System.out.println("set dates");
+			ps.setString(4, drug.trim()+"%");
+			System.out.println("set drug name");
+			ResultSet rs = ps.executeQuery();
+			System.out.println("execute query");
+			
+			while (rs.next()) {
+				String drug_name = rs.getString(1);
+				int quantity = rs.getInt(2);
+				ReportElement1 re = new ReportElement1(drug_name, quantity);
+				drugs.add(re);
+			}
+			System.out.println("add to drugs");
+			
+			conn.close();
+			model.addAttribute("startDate", startDate);
+			model.addAttribute("endDate", endDate);
+			model.addAttribute("pharmacyID", pharmacyID);
+			model.addAttribute("drug", drug);
+			model.addAttribute("report", drugs);
+			return "pharmacy_report";
+		}
 		
+		catch (SQLException se) {
+			System.out.println("exception caught");
+			return "error";
+		}
 		
-		model.addAttribute("startDate", startDate);
-		model.addAttribute("endDate", endDate);
-		model.addAttribute("pharmacyID", pharmacyID);
-		model.addAttribute("report", drugs);
-		return "pharmacy_report";
 	}
 	
 	
@@ -138,21 +196,54 @@ public class Controller363 {
 			Model model) {
 		System.out.println("fda report. drug="+drug+", start="+startDate+", end="+endDate);  // for debug
 		
-		/*
-		 * replace following code with code to perform db search
-		 * for drug quantity used by doctors
-		 */
 		ArrayList<ReportElement1> drugs = new ArrayList<>();
-		drugs.add(new ReportElement1("Doctor No", 5000));
-		drugs.add(new ReportElement1("Doctor 007", 15000));
+
+		try {
+			Connection conn = getConnection();
+			String query = "SELECT CONCAT(doctor.first_name, ' ', doctor.last_name), SUM(prescription.quantity) "
+					+ "FROM doctor JOIN prescription "
+					+ "ON doctor.SSN = prescription.dr_ssn "
+					+ "WHERE trade_name LIKE ? "
+					+ "AND prescribe_date BETWEEN ? AND ? "
+					+ "GROUP BY prescription.dr_ssn ";
+			System.out.println("set connection");
+			// prepared statement will return the doctor's name and the number of times
+			// that doctor has prescribed the drug within the start and end dates
+			PreparedStatement ps = conn.prepareStatement(query);
+			System.out.println("prepared statement");
+			ps.setString(1, drug.trim()+"%");
+			System.out.println("set string");
+			ps.setDate(2, Date.valueOf(startDate));
+			ps.setDate(3, Date.valueOf(endDate));
+			System.out.println("set dates");
+			ResultSet rs = ps.executeQuery();
+			System.out.println("execute query");
+			
+			// while rs has another element
+			while (rs.next()) {
+				// report element is the name and quantity returned by the query
+				String name = rs.getString(1);
+				int quantity = rs.getInt(2);
+				ReportElement1 re = new ReportElement1(name, quantity);
+				drugs.add(re);
+			}
+			System.out.println("add to drugs");
+			
+			// close the connection and return the fda report
+			conn.close();
+			model.addAttribute("startDate", startDate);
+			model.addAttribute("endDate", endDate);
+			model.addAttribute("drug", drug);
+			model.addAttribute("report", drugs);
+			return "fda_report";
+		}
 		
+		// otherwise return the error page
+		catch(SQLException se) {
+			System.out.println("catch fda report");
+			return "error";
+		}
 		
-		
-		model.addAttribute("startDate", startDate);
-		model.addAttribute("endDate", endDate);
-		model.addAttribute("drug", drug);
-		model.addAttribute("report", drugs);
-		return "fda_report";
 	}
 	
 	/*
