@@ -3,25 +3,25 @@ package com.csumb.cst363;
 
 public class Prescription {
 	
-	private String rxid;  // primary key
+	private int rxid;  // primary key
 	private String drugName;
 	private int quantity;
 	private int patient_ssn;
 	private String patientName;
 	private int doctor_ssn;
 	private String doctorName;
-	private String pharmacyID;   // pharmacy fields will be null or blank if no pharmacy has been chosen
+	private int pharmacyID;   // pharmacy fields will be null or blank if no pharmacy has been chosen
 	private String pharmacyAddress;
 	private String pharmacyPhone;
 	private String pharmacyName;
-	private String dateFilled;   // this field is blank or null if prescription has not been filled
+	private java.sql.Date dateFilled;   // this field is blank or null if prescription has not been filled
 	private double price;
 	
 	
-	public String getRxid() {
+	public int getRxid() {
 		return rxid;
 	}
-	public void setRxid(String rxid) {
+	public void setRxid(int rxid) {
 		this.rxid = rxid;
 	}
 	public String getDrugName() {
@@ -60,10 +60,10 @@ public class Prescription {
 	public void setDoctorName(String doctorName) {
 		this.doctorName = doctorName;
 	}
-	public String getPharmacyID() {
+	public int getPharmacyID() {
 		return pharmacyID;
 	}
-	public void setPharmacyID(String pharmacyID) {
+	public void setPharmacyID(int pharmacyID) {
 		this.pharmacyID = pharmacyID;
 	}
 	public String getPharmacyAddress() {
@@ -84,10 +84,10 @@ public class Prescription {
 	public void setPharmacyName(String pharmacyName) {
 		this.pharmacyName = pharmacyName;
 	}
-	public String getDateFilled() {
+	public java.sql.Date getDateFilled() {
 		return dateFilled;
 	}
-	public void setDateFilled(String dateFilled) {
+	public void setDateFilled(java.sql.Date dateFilled) {
 		this.dateFilled = dateFilled;
 	}
 	public double  getCost() {
