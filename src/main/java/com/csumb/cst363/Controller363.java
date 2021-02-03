@@ -47,59 +47,66 @@ public class Controller363 {
 		System.out.println(p.toString()); // debug -- print form data to console
 
 		try {
+			// establish connection
 			Connection conn = jdbcTemplate.getDataSource().getConnection();
 
+			// first validate the doctor credentials
+			// doctor ssn must exist and match the entered doctor name
 			PreparedStatement validDrCreds = conn.prepareStatement(
 					"select d.ssn, f.ssn, CONCAT(f.first_name, ' ', f.last_name) " + "from doctor as d " + "join doctor as f on d.ssn = f.ssn "
 							+ "where d.ssn = f.ssn and f.ssn = ? and CONCAT(f.first_name, ' ', f.last_name) = ?");
 			validDrCreds.setInt(1, p.getDoctor_ssn());
 			validDrCreds.setString(2, p.getDoctorName());
 			ResultSet rs = validDrCreds.executeQuery();
-
+			
+			// if the query does not come up with a result, 
+			// the entry is invalid
 			if (!rs.next()) {
 				String docCredError = "Doctor SSN and Name do not match";
 				model.addAttribute("msg", docCredError);
 				return "error";
 			}
 
-
+			// next validate the patient credentials
+			// patient ssn must exist and match the entered patient name
 			PreparedStatement validPatientCreds = conn.prepareStatement(
 					"select p.ssn, f.ssn, CONCAT(f.first_name, ' ', f.last_name) " + "from patient as p " + "join patient as f on p.ssn = f.ssn "
 							+ "where p.ssn = f.ssn and f.ssn = ? and CONCAT(f.first_name, ' ', f.last_name) = ?");
 			validPatientCreds.setInt(1, p.getPatient_ssn());
 			validPatientCreds.setString(2, p.getPatientName());
 			rs = validPatientCreds.executeQuery();
-
+			
+			// if the query does not come up with a result,
+			// the entry is invalid
 			if (!rs.next()) {
 				String docCredError = "Patient SSN and Name do not match";
 				model.addAttribute("msg", docCredError);
 				return "error";
 			} 
-
+			
+			// next validate that the drug name exists in the db
 			PreparedStatement validDrug = conn
 					.prepareStatement("select trade_name from drug " + "where trade_name = ?");
 			validDrug.setString(1, p.getDrugName());
 			rs = validDrug.executeQuery();
 
+			// if the query does not come up with a result,
+			// the drug does not exist in the db
 			if (!rs.next()) {
 				String drugNameError = "This is not a valid drug name";
 				model.addAttribute("msg", drugNameError);
 				return "error";
 			} 
 
-			// insert code for insertion into table here
-			String query = "INSERT INTO prescription " + "(quantity, dr_ssn, patient_ssn, trade_name) "
-					+ "VALUES (?, ?, ?, ?) ";
+			// finally, if all queries come up with results, insert new prescription into db
+			String query = "INSERT INTO prescription " + "(quantity, prescribe_date, dr_ssn, patient_ssn, trade_name) "
+					+ "VALUES (?, ?, ?, ?, ?) ";
 			PreparedStatement ps = conn.prepareStatement(query);
-			System.out.println("prepared statement");
 			ps.setInt(1, p.getQuantity());
-			System.out.println("set int");
-			ps.setInt(2, p.getDoctor_ssn());
-			System.out.println("set int");
-			ps.setInt(3, p.getPatient_ssn());
-			System.out.println("set int");
-			ps.setString(4, p.getDrugName());
-			System.out.println("set string");
+			ps.setDate(2, new Date(System.currentTimeMillis()));
+			ps.setInt(3, p.getDoctor_ssn());
+			ps.setInt(4, p.getPatient_ssn());
+			ps.setString(5, p.getDrugName());
 			ps.executeUpdate();
 			model.addAttribute("prescription", p);
 			conn.close();
@@ -141,11 +148,13 @@ public class Controller363 {
 		 * address from the database , and update the pharmacyID, cost and data of the
 		 * prescription
 		 */
-		// p.setCost(12.504);
-		// p.setDateFilled(new java.util.Date().toString());
 		
 		try {
+			// establish connection
 			Connection conn = getConnection();
+			
+			// first verify pharmacy credentials
+			// pharmacy name and address must exist and match
 			String pharmaQuery = "SELECT pharmacy.pharma_id, pharmacy.pharma_name, pharmacy.pharma_phone, "
 					+ "CONCAT(address.address1, ' ', address.city, ', ', address.state, ' ', address.zip_code) "
 					+ "FROM address JOIN pharmacy "
@@ -153,68 +162,94 @@ public class Controller363 {
 					+ "WHERE pharmacy.pharma_name = ? "
 					+ "AND CONCAT(address.address1, ' ', address.city, ', ', address.state, ' ', address.zip_code) = ?";
 			PreparedStatement pharma_ps = conn.prepareStatement(pharmaQuery);
-			System.out.println("prepared statement");
 			pharma_ps.setString(1, p.getPharmacyName());
 			pharma_ps.setString(2, p.getPharmacyAddress());
-			System.out.println("set strings");
 			ResultSet pharma_rs = pharma_ps.executeQuery();
-			System.out.println("validate pharmacy");
 			
+			// if the query does not come up with a result,
+			// the pharmacy data is invalid
 			if (!pharma_rs.next()) {
-				System.out.println("no rs next pharma");
 				String pharmaError = "Pharmacy name and address do not match";
 				model.addAttribute("msg", pharmaError);
 				return "error";
 			}
 			
-			String prescriptionQuery = "SELECT prescription_id, dr_ssn, CONCAT(doctor.first_name, ' ', doctor.last_name), "
-					+ "patient_ssn, drug.trade_name, quantity, sells.price "
-					+ "FROM doctor JOIN pharmacy JOIN drug JOIN sells "
-					+ "ON pharmacy.pharma_id = sells.pharma_id "
-					+ "AND drug.trade_name = sells.trade_name "
-					+ "JOIN prescription "
-					+ "ON pharmacy.pharma_id = prescription.pharma_id "
-					+ "AND drug.trade_name = prescription.trade_name "
-					+ "AND doctor.SSN = prescription.dr_ssn "
-					+ "WHERE prescription_id = ?";
-			PreparedStatement prescription_ps = conn.prepareStatement(prescriptionQuery);
-			System.out.println("prepared statement");
-			prescription_ps.setInt(1, p.getRxid());
-			System.out.println("set id");
-			ResultSet prescription_rs = prescription_ps.executeQuery();
-			System.out.println("validate prescription");
+			// else set the pharmacy id and pharmacy phone from the result set
+			p.setPharmacyID(pharma_rs.getInt(1));
+			p.setPharmacyPhone(pharma_rs.getString(3));
 			
+			// next validate prescription credentials
+			// the prescription id must exist
+			String prescriptionQuery = "SELECT * FROM prescription WHERE prescription_id = ?";
+			PreparedStatement prescription_ps = conn.prepareStatement(prescriptionQuery);
+			prescription_ps.setInt(1, p.getRxid());
+			ResultSet prescription_rs = prescription_ps.executeQuery();
+			
+			// if the query does not come up with a result,
+			// the prescription id does not exist
 			if (!prescription_rs.next()) {
-				System.out.println("no rs next prescription");
 				String prescriptionError = "Prescription id does not exist in the database";
 				model.addAttribute("msg", prescriptionError);
 				return "error";
 			}
 			
+			// else set dr and patient ssn, drug name, and quantity
+			// from the result set
+			p.setDoctor_ssn(prescription_rs.getInt(6));
+			p.setPatient_ssn(prescription_rs.getInt(7));
+			p.setDrugName(prescription_rs.getString(8));
+			p.setQuantity(prescription_rs.getInt(2));
+			
+			// next we need to populate the doctor name field
+			String drQuery = "SELECT CONCAT(first_name, ' ', last_name) "
+					+ "FROM doctor WHERE SSN = ? ";
+			PreparedStatement dr_ps = conn.prepareStatement(drQuery);
+			dr_ps.setInt(1, p.getDoctor_ssn());
+			ResultSet dr_rs = dr_ps.executeQuery();
+			
+			// if the query does not come up with a result,
+			// no doctor name was found
+			if (!dr_rs.next()) {
+				String doctorError = "Doctor does not exist";
+				model.addAttribute("msg", doctorError);
+				return "error";
+			}
+			
+			// else set doctor name from the result set
+			p.setDoctorName(dr_rs.getString(1));
+			
+			// next we need to populate the cost field
+			String priceQuery = "SELECT price FROM drug JOIN pharmacy JOIN sells "
+					+ "ON drug.trade_name = sells.trade_name "
+					+ "AND pharmacy.pharma_id = sells.pharma_id "
+					+ "WHERE drug.trade_name = ? ";
+			PreparedStatement price_ps = conn.prepareStatement(priceQuery);
+			price_ps.setString(1, p.getDrugName());
+			ResultSet price_rs = price_ps.executeQuery();
+			
+			// if the query does not come up with a result,
+			// no price was set in the sells table
+			if (!price_rs.next()) {
+				String doctorError = "Cannot find price";
+				model.addAttribute("msg", doctorError);
+				return "error";
+			}
+			
+			// else set the cost from the result set
+			p.setCost(price_rs.getDouble(1));
+			
+			// finally, if all queries come up with results, 
+			// update the prescription with pharma_id and fill_date
 			String updateQuery = "UPDATE prescription "
 					+ "SET pharma_id = ?, fill_date = ? "
 					+ "WHERE prescription_id = ?";
 			PreparedStatement update_ps = conn.prepareStatement(updateQuery);
-			System.out.println("prepared statement");
 			update_ps.setInt(1, pharma_rs.getInt(1));
-			System.out.println("set int");
 			update_ps.setDate(2, new Date(System.currentTimeMillis()));
-			System.out.println("set date");
 			update_ps.setInt(3, prescription_rs.getInt(1));
-			System.out.println("set int");
 			update_ps.executeUpdate();
-			System.out.println("update prescription");
 			
-			p.setDoctor_ssn(prescription_rs.getInt(2));
-			p.setDoctorName(prescription_rs.getString(3));
-			p.setPatient_ssn(prescription_rs.getInt(4));
-			p.setDrugName(prescription_rs.getString(5));
-			p.setQuantity(prescription_rs.getInt(6));
-			p.setPharmacyID(pharma_rs.getInt(1));
-			p.setPharmacyPhone(pharma_rs.getString(3));
-			p.setDateFilled(new Date(System.currentTimeMillis()));
-			p.setCost(prescription_rs.getInt(7));
-			
+			p.setDateFilled(new Date(System.currentTimeMillis()));	
 			
 			conn.close();
 			model.addAttribute("prescription", p);
@@ -222,7 +257,7 @@ public class Controller363 {
 			
 		}
 		catch(SQLException se) {
-			System.out.println("catch exception");
+			model.addAttribute("msg", "Caught Exception");
 			return "error";
 		}
 
@@ -242,41 +277,46 @@ public class Controller363 {
 		ArrayList<ReportElement1> drugs = new ArrayList<>();
 
 		try {
+			// establish connection
 			Connection conn = getConnection();
+			
+			// query to get drug name and quantity prescribed
 			String query = "SELECT trade_name, SUM(quantity) " + "FROM prescription " + "WHERE pharma_id = ? "
 					+ "AND fill_date BETWEEN ? AND ? " + "GROUP BY trade_name " + "HAVING trade_name LIKE ? ";
-			System.out.println("set connection");
 			PreparedStatement ps = conn.prepareStatement(query);
-			System.out.println("prepared statement");
 			ps.setInt(1, Integer.parseInt(pharmacyID));
-			System.out.println("set int");
 			ps.setDate(2, Date.valueOf(startDate));
 			ps.setDate(3, Date.valueOf(endDate));
-			System.out.println("set dates");
 			ps.setString(4, drug.trim() + "%");
-			System.out.println("set drug name");
 			ResultSet rs = ps.executeQuery();
-			System.out.println("execute query");
 
-			while (rs.next()) {
+			// if the query returns a result set,
+			// display drugs
+			if (rs.next()) {
 				String drug_name = rs.getString(1);
 				int quantity = rs.getInt(2);
 				ReportElement1 re = new ReportElement1(drug_name, quantity);
 				drugs.add(re);
-			}
-			System.out.println("add to drugs");
 
-			conn.close();
-			model.addAttribute("startDate", startDate);
-			model.addAttribute("endDate", endDate);
-			model.addAttribute("pharmacyID", pharmacyID);
-			model.addAttribute("drug", drug);
-			model.addAttribute("report", drugs);
-			return "pharmacy_report";
+				conn.close();
+				model.addAttribute("startDate", startDate);
+				model.addAttribute("endDate", endDate);
+				model.addAttribute("pharmacyID", pharmacyID);
+				model.addAttribute("drug", drug);
+				model.addAttribute("report", drugs);
+				return "pharmacy_report";
+			}
+			// if the query does not return a result,
+			// the pharmacy id or drug name is invalid
+			else {
+				String pharmaError = "Invalid pharmacy id or drug name";
+				model.addAttribute("msg", pharmaError);
+				return "error";
+			}
 		}
 
 		catch (SQLException se) {
-			System.out.println("exception caught");
+			model.addAttribute("msg", "Caught Exception");
 			return "error";
 		}
 
@@ -295,46 +335,49 @@ public class Controller363 {
 		ArrayList<ReportElement1> drugs = new ArrayList<>();
 
 		try {
+			// establish connection
 			Connection conn = getConnection();
+			
+			// query to get doctor name and amount prescribed
 			String query = "SELECT CONCAT(doctor.first_name, ' ', doctor.last_name), SUM(prescription.quantity) "
 					+ "FROM doctor JOIN prescription " + "ON doctor.SSN = prescription.dr_ssn "
 					+ "WHERE trade_name LIKE ? " + "AND prescribe_date BETWEEN ? AND ? "
 					+ "GROUP BY prescription.dr_ssn ";
-			System.out.println("set connection");
 			// prepared statement will return the doctor's name and the number of times
 			// that doctor has prescribed the drug within the start and end dates
 			PreparedStatement ps = conn.prepareStatement(query);
-			System.out.println("prepared statement");
 			ps.setString(1, drug.trim() + "%");
-			System.out.println("set string");
 			ps.setDate(2, Date.valueOf(startDate));
 			ps.setDate(3, Date.valueOf(endDate));
-			System.out.println("set dates");
 			ResultSet rs = ps.executeQuery();
-			System.out.println("execute query");
 
-			// while rs has another element
-			while (rs.next()) {
-				// report element is the name and quantity returned by the query
+			// if the query returns a result, display drugs
+			if (rs.next()) {
 				String name = rs.getString(1);
 				int quantity = rs.getInt(2);
 				ReportElement1 re = new ReportElement1(name, quantity);
 				drugs.add(re);
+				
+				// close the connection and return the fda report
+				conn.close();
+				model.addAttribute("startDate", startDate);
+				model.addAttribute("endDate", endDate);
+				model.addAttribute("drug", drug);
+				model.addAttribute("report", drugs);
+				return "fda_report";
 			}
-			System.out.println("add to drugs");
-
-			// close the connection and return the fda report
-			conn.close();
-			model.addAttribute("startDate", startDate);
-			model.addAttribute("endDate", endDate);
-			model.addAttribute("drug", drug);
-			model.addAttribute("report", drugs);
-			return "fda_report";
+			// if the query does not return a result set,
+			// the drug name is invalid
+			else {
+				String fdaError = "Drug name does not exist in the db";
+				model.addAttribute("msg", fdaError);
+				return "error";
+			}
 		}
 
 		// otherwise return the error page
 		catch (SQLException se) {
-			System.out.println("catch fda report");
+			model.addAttribute("msg", "Caught Exception");
 			return "error";
 		}
 
